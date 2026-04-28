@@ -54,6 +54,9 @@ export default function App() {
   const [adminPass, setAdminPass] = useState("");
   const [adminError, setAdminError] = useState("");
   const [orders, setOrders] = useState<Order[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "new" | "viewed">("all");
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -567,10 +570,38 @@ export default function App() {
                   { label: 'মোট বিক্রয় (৳)', val: stats.sales, color: 'from-pink-600 to-pink-800' }
                 ].map((s, i) => (
                   <div key={i} className={cn("p-6 rounded-2xl bg-gradient-to-br shadow-xl", s.color)}>
-                    <div className="text-sm font-medium opacity-80 mb-2">{s.label}</div>
+                    <div className="text-sm font-medium opacity-80 mb-1">{s.label}</div>
                     <div className="text-3xl font-bold">{s.val}</div>
                   </div>
                 ))}
+              </div>
+
+              {/* Controls */}
+              <div className="flex flex-col md:flex-row gap-4 mb-6">
+                <div className="flex-1 relative">
+                  <input 
+                    type="text" 
+                    placeholder="নাম বা ফোন নম্বর দিয়ে সার্চ করুন..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-12 py-3 focus:border-pink-primary outline-none"
+                  />
+                  <Mouse className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                </div>
+                <div className="flex gap-2 bg-white/5 p-1 rounded-xl border border-white/10">
+                  {["all", "new", "viewed"].map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setFilterStatus(f as any)}
+                      className={cn(
+                        "px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all",
+                        filterStatus === f ? "bg-pink-deep text-white shadow-lg" : "text-gray-400 hover:text-white"
+                      )}
+                    >
+                      {f === "all" ? "সব" : f === "new" ? "নতুন" : "দেখা হয়েছে"}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Orders Table */}
@@ -584,65 +615,86 @@ export default function App() {
                     <table className="w-full text-left">
                       <thead>
                         <tr className="bg-white/5 border-b border-white/10 uppercase text-[10px] tracking-wider text-gray-400">
-                          <th className="px-6 py-4">#</th>
-                          <th className="px-6 py-4">তারিখ</th>
-                          <th className="px-6 py-4">পণ্য তথ্য</th>
-                          <th className="px-6 py-4">গ্রাহক তথ্য</th>
-                          <th className="px-6 py-4">পেমেন্ট</th>
+                          <th className="px-6 py-4">সময় ও তারিখ</th>
+                          <th className="px-6 py-4">গ্রাহকের নাম ও ফোন</th>
+                          <th className="px-6 py-4">সম্পূর্ণ ঠিকানা</th>
+                          <th className="px-6 py-4">পরিমাণ ও দাম</th>
                           <th className="px-6 py-4">স্ট্যাটাস</th>
                           <th className="px-6 py-4 text-center">অ্যাকশন</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/10">
-                        {orders.map((order, idx) => (
-                          <tr key={order.id} className="hover:bg-white/[0.02] transition-colors group">
+                        {orders
+                          .filter(o => 
+                            (filterStatus === "all" || o.status === filterStatus) &&
+                            (o.name.toLowerCase().includes(searchQuery.toLowerCase()) || o.phone.includes(searchQuery))
+                          )
+                          .map((order, idx) => (
+                          <tr 
+                            key={order.id} 
+                            onClick={() => setSelectedOrder(order)}
+                            className="hover:bg-white/[0.05] cursor-pointer transition-colors group"
+                          >
                             <td className="px-6 py-5 text-gray-500">{orders.length - idx}</td>
                             <td className="px-6 py-5">
-                              <div className="text-xs">{order.date.split(',')[0]}</div>
+                              <div className="text-xs font-medium text-gray-300">{order.date.split(',')[0]}</div>
                               <div className="text-[10px] opacity-40">{order.date.split(',')[1]}</div>
                             </td>
                             <td className="px-6 py-5">
-                              <div className="font-bold">{order.qty}টি বক্স</div>
-                              <div className="text-xs text-pink-400">৳{order.total}</div>
-                            </td>
-                            <td className="px-6 py-5">
-                              <div className="font-bold text-sm">{order.name}</div>
-                              <a href={`tel:${order.phone}`} className="text-xs text-blue-400 hover:underline flex items-center gap-1">
+                              <div className="font-bold text-sm text-white group-hover:text-pink-primary transition-colors">{order.name}</div>
+                              <div className="text-xs text-blue-400 flex items-center gap-1 mt-1 font-mono">
                                 <Smartphone className="w-3 h-3" /> {order.phone}
-                              </a>
-                              <div className="text-[10px] opacity-60 mt-1 max-w-[200px] truncate">{order.address}</div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-5 max-w-[200px]">
+                              <div className="text-xs text-gray-300 leading-relaxed break-words">{order.address}</div>
                             </td>
                             <td className="px-6 py-5">
-                              <span className="text-[10px] px-2 py-1 bg-white/10 rounded uppercase">COD</span>
+                              <div className="font-bold text-sm text-white">{order.qty} টি বক্স</div>
+                              <div className="text-xs text-green-400 font-mono">৳{order.total}</div>
                             </td>
                             <td className="px-6 py-5">
                               {order.status === 'new' ? (
-                                <span className="flex items-center gap-2 text-[10px] font-bold text-green-400 bg-green-400/10 px-3 py-1 rounded-full uppercase ring-1 ring-green-400/20">
+                                <span className="inline-flex items-center gap-2 text-[10px] font-bold text-green-400 bg-green-400/10 px-3 py-1 rounded-full uppercase ring-1 ring-green-400/20">
                                   <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" /> নতুন
                                 </span>
                               ) : (
-                                <span className="flex items-center gap-2 text-[10px] font-bold text-gray-400 bg-white/5 px-3 py-1 rounded-full uppercase">
-                                  <Eye className="w-3 h-3" /> দেখা হয়েছে
+                                <span className="inline-flex items-center gap-2 text-[10px] font-bold text-gray-400 bg-white/5 px-3 py-1 rounded-full uppercase">
+                                  দেখা হয়েছে
                                 </span>
                               )}
                             </td>
-                            <td className="px-6 py-5">
+                            <td className="px-6 py-5" onClick={(e) => e.stopPropagation()}>
                               <div className="flex justify-center gap-2">
-                                {order.status === 'new' && (
-                                  <button 
-                                    onClick={() => markAsViewed(order.id)}
-                                    title="Mark as Viewed"
-                                    className="w-10 h-10 bg-green-600/20 text-green-500 rounded-xl flex items-center justify-center hover:bg-green-600/40 transition-all border border-green-600/30"
-                                  >
-                                    <CheckCircle2 className="w-5 h-5" />
-                                  </button>
-                                )}
+                                <button 
+                                  onClick={() => {
+                                    const text = `নাম: ${order.name}\nফোন: ${order.phone}\nঠিকানা: ${order.address}\nপরিমাণ: ${order.qty}\nমোট: ${order.total}`;
+                                    navigator.clipboard.writeText(text);
+                                    alert("সব তথ্য কপি করা হয়েছে!");
+                                  }}
+                                  title="Copy All Info"
+                                  className="w-9 h-9 bg-blue-600/20 text-blue-400 border border-blue-600/30 rounded-lg flex items-center justify-center hover:bg-blue-600/40 transition-all"
+                                >
+                                  <Smartphone className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={() => markAsViewed(order.id)}
+                                  className={cn(
+                                    "w-9 h-9 rounded-lg flex items-center justify-center transition-all border",
+                                    order.status === 'new' 
+                                      ? "bg-green-600/20 text-green-500 border-green-600/30 hover:bg-green-600/40" 
+                                      : "bg-white/5 text-gray-500 border-white/10 opacity-50 cursor-not-allowed"
+                                  )}
+                                  disabled={order.status !== 'new'}
+                                >
+                                  <CheckCircle2 className="w-4 h-4" />
+                                </button>
                                 <button 
                                   onClick={() => deleteOrder(order.id)}
                                   title="Delete"
-                                  className="w-10 h-10 bg-red-600/20 text-red-500 rounded-xl flex items-center justify-center hover:bg-red-600/40 transition-all border border-red-600/30"
+                                  className="w-9 h-9 bg-red-600/20 text-red-500 border border-red-600/30 rounded-lg flex items-center justify-center hover:bg-red-600/40 transition-all"
                                 >
-                                  <Trash2 className="w-5 h-5" />
+                                  <Trash2 className="w-4 h-4" />
                                 </button>
                               </div>
                             </td>
@@ -654,6 +706,120 @@ export default function App() {
                 )}
               </div>
             </main>
+
+            {/* Order Detail Modal */}
+            <AnimatePresence>
+              {selectedOrder && (
+                <div className="fixed inset-0 z-[400] flex items-center justify-center px-4">
+                  <motion.div 
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    onClick={() => setSelectedOrder(null)}
+                    className="absolute inset-0 bg-black/90 backdrop-blur-sm"
+                  />
+                  <motion.div 
+                    initial={{ scale: 0.9, opacity: 0, y: 20 }} 
+                    animate={{ scale: 1, opacity: 1, y: 0 }} 
+                    exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                    className="bg-[#1a1425] border border-white/10 rounded-3xl p-8 w-full max-w-lg relative z-10 shadow-2xl"
+                  >
+                    <div className="flex justify-between items-start mb-8">
+                      <div>
+                        <h3 className="text-2xl font-bold text-white mb-1">অর্ডার ডিটেইলস</h3>
+                        <p className="text-xs text-gray-500 font-mono">ID: {selectedOrder.id}</p>
+                      </div>
+                      <button 
+                        onClick={() => setSelectedOrder(null)}
+                        className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center hover:bg-white/10 transition-all"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                          <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">তারিখ</div>
+                          <div className="text-sm font-bold">{selectedOrder.date}</div>
+                        </div>
+                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                          <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">স্ট্যাটাস</div>
+                          <div className="flex items-center gap-2">
+                             <div className={cn("w-2 h-2 rounded-full", selectedOrder.status === 'new' ? "bg-green-500 animate-pulse" : "bg-gray-500")} />
+                             <span className="text-sm font-bold uppercase">{selectedOrder.status === 'new' ? 'নতুন' : 'দেখা হয়েছে'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+                        <div className="flex justify-between items-center mb-4 border-b border-white/5 pb-2">
+                           <span className="text-xs font-bold text-pink-primary uppercase tracking-widest">গ্রাহকের তথ্য</span>
+                           <button 
+                             onClick={() => {
+                               const text = `নাম: ${selectedOrder.name}\nফোন: ${selectedOrder.phone}\nঠিকানা: ${selectedOrder.address}\nপরিমাণ: ${selectedOrder.qty}\nমোট: ${selectedOrder.total}`;
+                               navigator.clipboard.writeText(text);
+                               alert("পুরো অর্ডার কপি করা হয়েছে!");
+                             }}
+                             className="text-blue-400 bg-blue-400/10 px-3 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 hover:bg-blue-400/20"
+                           >
+                             <CheckCircle2 className="w-3 h-3" /> সব কপি করুন
+                           </button>
+                        </div>
+                        <div className="space-y-4">
+                          <div className="flex justify-between group">
+                            <div className="flex-1">
+                              <div className="text-[10px] text-gray-500 mb-1">নাম</div>
+                              <div className="text-lg font-bold text-white">{selectedOrder.name}</div>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-gray-500 mb-1">ফোন</div>
+                            <div className="text-lg font-bold text-white font-mono">{selectedOrder.phone}</div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-gray-500 mb-1">ঠিকানা</div>
+                            <div className="text-sm text-gray-300 leading-relaxed bg-black/20 p-3 rounded-lg border border-white/5 mt-1">
+                              {selectedOrder.address}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-6 bg-gradient-to-br from-pink-900/40 to-pink-primary/20 rounded-2xl border border-pink-primary/20">
+                         <div className="flex justify-between items-center text-white">
+                            <div>
+                               <div className="text-[10px] opacity-60 uppercase font-bold mb-1">পণ্য ও পরিমাণ</div>
+                               <div className="text-xl font-bold">{selectedOrder.qty} টি বক্স</div>
+                            </div>
+                            <div className="text-right">
+                               <div className="text-[10px] opacity-60 uppercase font-bold mb-1">মোট বিল</div>
+                               <div className="text-2xl font-black text-pink-primary font-mono">৳{selectedOrder.total}</div>
+                            </div>
+                         </div>
+                      </div>
+
+                      <div className="flex gap-4">
+                        <button 
+                          onClick={() => { markAsViewed(selectedOrder.id); setSelectedOrder(null); }}
+                          disabled={selectedOrder.status !== 'new'}
+                          className={cn(
+                            "flex-1 py-4 rounded-xl font-bold transition-all",
+                            selectedOrder.status === 'new' ? "bg-green-600 text-white shadow-lg active:scale-95" : "bg-white/5 text-gray-500 cursor-not-allowed"
+                          )}
+                        >
+                          দেখা হয়েছে হিসেবে মার্ক করুন
+                        </button>
+                        <button 
+                          onClick={() => { deleteOrder(selectedOrder.id); setSelectedOrder(null); }}
+                          className="px-6 py-4 bg-red-600/20 text-red-500 border border-red-600/30 rounded-xl hover:bg-red-600 transition-all active:scale-95"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>
