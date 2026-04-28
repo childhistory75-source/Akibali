@@ -57,14 +57,30 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "new" | "viewed">("all");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [visitorCount, setVisitorCount] = useState(0);
   
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   // --- Effects ---
   useEffect(() => {
+    // Load Orders
     const savedOrders = localStorage.getItem('mouseBoxOrders');
     if (savedOrders) {
       setOrders(JSON.parse(savedOrders));
+    }
+
+    // Load and Increment Visitor Count
+    const savedVisits = localStorage.getItem('mouseBoxVisits');
+    const currentVisits = savedVisits ? parseInt(savedVisits) : 0;
+    
+    // Only increment if not visited in this session
+    if (!sessionStorage.getItem('mouseBox_session_visited')) {
+      const newVisits = currentVisits + 1;
+      localStorage.setItem('mouseBoxVisits', newVisits.toString());
+      setVisitorCount(newVisits);
+      sessionStorage.setItem('mouseBox_session_visited', 'true');
+    } else {
+      setVisitorCount(currentVisits);
     }
   }, []);
 
@@ -139,8 +155,111 @@ export default function App() {
     sales: orders.reduce((acc, curr) => acc + curr.total, 0)
   };
 
+  const exportToCSV = () => {
+    const headers = ["ID", "Date", "Name", "Phone", "Address", "Qty", "Total", "Status"];
+    const rows = orders.map(o => [o.id, o.date, o.name, o.phone, `"${o.address}"`, o.qty, o.total, o.status]);
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", `orders_export_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const [isAdminInvoice, setIsAdminInvoice] = useState<Order | null>(null);
+
   return (
     <div className="min-h-screen">
+      {/* Scroll to Top / Floating Bottom Button */}
+      <motion.button 
+        initial={{ opacity: 0, scale: 0.5 }}
+        whileInView={{ opacity: 1, scale: 1 }}
+        onClick={scrollToOrder}
+        className="md:hidden fixed bottom-6 right-6 z-[60] bg-pink-deep text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center animate-bounce"
+      >
+        <Smartphone className="w-6 h-6" />
+      </motion.button>
+
+      {/* Invoice View Modal */}
+      <AnimatePresence>
+        {isAdminInvoice && (
+          <div className="fixed inset-0 z-[500] bg-white text-black overflow-auto md:p-12 p-4">
+             <div className="max-w-3xl mx-auto border-2 border-gray-100 p-8 rounded-none md:rounded-3xl shadow-none md:shadow-2xl font-sans print:border-0 print:p-0">
+                <div className="flex justify-between items-center mb-12 border-b-4 border-pink-deep pb-8">
+                   <div>
+                     <h1 className="text-3xl font-black text-pink-deep uppercase tracking-tighter">INVOICE</h1>
+                     <p className="text-gray-500 font-mono text-sm">#{isAdminInvoice.id}</p>
+                   </div>
+                   <div className="text-right">
+                     <h2 className="text-xl font-bold">মাউস সেভিং বক্স</h2>
+                     <p className="text-xs text-gray-500">ফোন: ০১৮০৪৯৮৩৬২৬</p>
+                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-12 mb-12">
+                   <div>
+                     <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">গ্রাহক তথ্য:</h4>
+                     <p className="font-bold text-xl mb-1">{isAdminInvoice.name}</p>
+                     <p className="text-sm font-mono mb-2">{isAdminInvoice.phone}</p>
+                     <p className="text-sm text-gray-600 leading-relaxed max-w-[250px]">{isAdminInvoice.address}</p>
+                   </div>
+                   <div className="text-right">
+                     <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">অর্ডার তথ্য:</h4>
+                     <p className="text-sm">তারিখ: <span className="font-bold">{isAdminInvoice.date}</span></p>
+                     <p className="text-sm">পেমেন্ট: <span className="font-bold">CASH ON DELIVERY</span></p>
+                   </div>
+                </div>
+
+                <table className="w-full mb-12 border-collapse">
+                   <thead>
+                     <tr className="bg-gray-50 text-left text-xs font-bold">
+                       <th className="p-4 border-b">পণ্য</th>
+                       <th className="p-4 border-b text-center">পরিমাণ</th>
+                       <th className="p-4 border-b text-right">ইউনিট মূল্য</th>
+                       <th className="p-4 border-b text-right">মোট</th>
+                     </tr>
+                   </thead>
+                   <tbody>
+                     <tr>
+                       <td className="p-4 border-b font-medium italic">মাউস সেভিং বক্স (কিউট পিঙ্ক)</td>
+                       <td className="p-4 border-b text-center">{isAdminInvoice.qty}</td>
+                       <td className="p-4 border-b text-right">৳{PRICE}</td>
+                       <td className="p-4 border-b text-right font-bold">৳{isAdminInvoice.total}</td>
+                     </tr>
+                   </tbody>
+                </table>
+
+                <div className="flex flex-col items-end gap-2 mb-12 bg-gray-50 p-6 rounded-2xl">
+                   <div className="flex justify-between w-64 text-sm">
+                      <span>সাব-টোটাল:</span>
+                      <span className="font-mono">৳{isAdminInvoice.total}</span>
+                   </div>
+                   <div className="flex justify-between w-64 text-sm">
+                      <span>ডেলিভারি চার্জ:</span>
+                      <span className="font-mono">৳০</span>
+                   </div>
+                   <div className="flex justify-between w-64 text-xl font-black text-pink-deep border-t border-pink-100 pt-4 mt-2">
+                      <span>সর্বমোট:</span>
+                      <span className="font-mono">৳{isAdminInvoice.total}</span>
+                   </div>
+                </div>
+
+                <div className="text-center text-[10px] text-gray-400 border-t pt-8">
+                   <p className="mb-1 uppercase tracking-widest font-bold">Thank you for choosing us!</p>
+                   <p>This is a digital generated invoice.</p>
+                </div>
+
+                <div className="mt-12 flex justify-center gap-4 print:hidden">
+                   <button onClick={() => window.print()} className="bg-pink-deep text-white px-8 py-3 rounded-full font-bold shadow-lg hover:-translate-y-1 transition-all">প্রিন্ট করুন</button>
+                   <button onClick={() => setIsAdminInvoice(null)} className="bg-gray-100 text-gray-800 px-8 py-3 rounded-full font-bold">বন্ধ করুন</button>
+                </div>
+             </div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Toast Notification */}
       <AnimatePresence>
         {showToast && (
@@ -355,6 +474,81 @@ export default function App() {
         </div>
       </section>
 
+      {/* Testimonials Section */}
+      <section className="py-24 px-4 bg-white overflow-hidden">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-5xl font-extrabold text-gray-800 mb-4">আমাদের গ্রাহকদের <span className="text-pink-deep">মতামত</span></h2>
+            <div className="flex justify-center gap-1">
+              {[...Array(5)].map((_, i) => <CheckCircle2 key={i} className="w-6 h-6 text-yellow-400 fill-yellow-400" />)}
+            </div>
+            <p className="mt-4 text-gray-500 font-bold">৪.৯/৫ রেটিং (৫০০+ রিভিও)</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              { name: 'আরিফুল ইসলাম', text: 'খুবই সুন্দর প্রোডাক্ট! আমার মেয়ের জন্মদিনে গিফট করেছি, সে অনেক খুশি হয়েছে।', location: 'ঢাকা' },
+              { name: 'নুসরাত জাহান', text: 'পাসওয়ার্ড সিস্টেমটা অসাধারন। বাচ্চাদের জন্য শিক্ষামূলক এবং নিরাপদ একটি খেলনা।', location: 'চট্টগ্রাম' },
+              { name: 'তানভীর আহমেদ', text: 'ডেলিভারি খুব দ্রুত পেয়েছি। প্যাকেজিংও অনেক ভালো ছিল। ধন্যবাদ!', location: 'সিলেট' }
+            ].map((review, i) => (
+              <motion.div 
+                key={i}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="p-8 bg-pink-pale rounded-[2.5rem] relative"
+              >
+                <div className="flex gap-1 mb-4">
+                   {[...Array(5)].map((_, i) => <CheckCircle2 key={i} className="w-4 h-4 text-yellow-500 fill-yellow-500" />)}
+                </div>
+                <p className="text-gray-700 italic mb-6">"{review.text}"</p>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-pink-primary rounded-full flex items-center justify-center text-white font-bold">
+                    {review.name[0]}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-800">{review.name}</h4>
+                    <p className="text-xs text-gray-500">{review.location}</p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ Section */}
+      <section className="py-24 px-4 bg-pink-pale">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl md:text-5xl font-extrabold text-center mb-16 text-gray-800">
+            আপনার কিছু <span className="text-pink-deep">জিজ্ঞাসা?</span>
+          </h2>
+          
+          <div className="space-y-4">
+            {[
+              { q: 'টাকা জমানো ছাড়া আর কি কাজ করে?', a: 'এটি শুধু জমা করা নয়, বরং শিশুদের মধ্যে সঞ্চয়ের মানসিকতা এবং দায়িত্বশীলতা গড়ে তোলে।' },
+              { q: 'পাসওয়ার্ড ভুলে গেলে কি করব?', a: 'ব্যাটারি খুলে ২ মিনিট পর আবার লাগালে পাসওয়ার্ড ডিফল্ট (০০০০) হয়ে যাবে।' },
+              { q: 'সব ধরণের নোট কি নেয়া যায়?', a: 'হ্যাঁ, এটি ১, ২, ৫, ১০, ২০, ৫০, ১০০, ২০০, ৫০০ এবং ১০০০ টাকার সব নোট অটোমেটিক টেনে নেয়।' },
+              { q: 'ডেলিভারি কি সারা দেশে পাবেন?', a: 'হ্যাঁ! ক্যাশ অন ডেলিভারিতে আমরা সারা বাংলাদেশে পণ্য পাঠিয়ে থাকি।' }
+            ].map((item, i) => (
+              <motion.details 
+                key={i}
+                className="group bg-white rounded-2xl shadow-sm overflow-hidden"
+              >
+                <summary className="flex items-center justify-between p-6 cursor-pointer list-none">
+                  <h4 className="font-bold text-gray-800">{item.q}</h4>
+                  <Plus className="w-5 h-5 text-pink-deep group-open:rotate-45 transition-transform" />
+                </summary>
+                <div className="p-6 pt-0 text-gray-600 leading-relaxed border-t border-pink-50">
+                  {item.a}
+                </div>
+              </motion.details>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Order Form Section */}
       <section id="order" className="py-24 px-4 bg-pink-pale">
         <div className="max-w-3xl mx-auto">
@@ -367,7 +561,23 @@ export default function App() {
             <div className="bg-white rounded-[1.4rem] p-8 md:p-12">
               <div className="text-center mb-10">
                 <h2 className="text-3xl font-extrabold mb-4 text-gray-800">অর্ডার কনফার্ম করুন</h2>
-                <p className="text-gray-500">নিচের ফরমটি পূরণ করে আপনার অর্ডারটি বুক করুন।</p>
+                <p className="text-gray-500 mb-6">নিচের ফরমটি পূরণ করে আপনার অর্ডারটি বুক করুন।</p>
+                
+                {/* Stock Progress Bar */}
+                <div className="max-w-xs mx-auto mb-8">
+                  <div className="flex justify-between text-xs font-bold text-pink-deep mb-2">
+                    <span>স্টক সীমিত</span>
+                    <span>১২টি বাকি</span>
+                  </div>
+                  <div className="h-3 bg-pink-100 rounded-full overflow-hidden border border-pink-200">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      whileInView={{ width: '85%' }}
+                      transition={{ duration: 1.5, ease: 'easeOut' }}
+                      className="h-full bg-gradient-to-r from-pink-primary to-pink-deep"
+                    />
+                  </div>
+                </div>
               </div>
               
               <form onSubmit={handleOrderSubmit} className="space-y-6">
@@ -538,17 +748,26 @@ export default function App() {
             className="fixed inset-0 z-[300] bg-[#0f0a1a] text-white flex flex-col font-sans"
           >
             {/* Admin Header */}
-            <header className="p-6 border-b border-white/10 flex justify-between items-center bg-black/20 backdrop-blur-xl">
+            <header className="p-6 border-b border-white/10 flex flex-wrap gap-4 justify-between items-center bg-black/20 backdrop-blur-xl">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-pink-deep rounded-xl flex items-center justify-center">
                   <TrendingDown className="w-6 h-6 text-white" />
                 </div>
-                <h1 className="text-2xl font-bold tracking-tight">অর্ডার্স ড্যাশবোর্ড</h1>
+                <div>
+                   <h1 className="text-xl md:text-2xl font-bold tracking-tight leading-none mb-1">প্রো অ্যাডমিন ড্যাশবোর্ড</h1>
+                   <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em]">Management System v2.0</p>
+                </div>
               </div>
-              <div className="flex gap-4">
+              <div className="flex flex-wrap gap-3">
+                <button 
+                  onClick={exportToCSV}
+                  className="px-4 py-2 bg-blue-900/30 text-blue-400 border border-blue-900/50 rounded-lg hover:bg-blue-900/50 transition-all flex items-center gap-2 text-xs font-bold"
+                >
+                  <CreditCard className="w-4 h-4" /> এক্সপোর্ট (CSV)
+                </button>
                 <button 
                   onClick={clearAllOrders}
-                  className="px-4 py-2 bg-red-900/30 text-red-400 border border-red-900/50 rounded-lg hover:bg-red-900/50 transition-all flex items-center gap-2"
+                  className="px-4 py-2 bg-red-900/30 text-red-400 border border-red-900/50 rounded-lg hover:bg-red-900/50 transition-all flex items-center gap-2 text-xs font-bold"
                 >
                   <Trash2 className="w-4 h-4" /> সব মুছুন
                 </button>
@@ -563,15 +782,19 @@ export default function App() {
 
             <main className="flex-1 overflow-auto p-6">
               {/* Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 {[
-                  { label: 'মোট অর্ডার', val: stats.total, color: 'from-blue-600 to-blue-800' },
-                  { label: 'নতুন অর্ডার', val: stats.new, color: 'from-green-600 to-green-800' },
-                  { label: 'মোট বিক্রয় (৳)', val: stats.sales, color: 'from-pink-600 to-pink-800' }
+                  { label: 'মোট ভিজিটর', val: visitorCount, color: 'from-purple-600 to-purple-900', icon: <Eye className="w-4 h-4" /> },
+                  { label: 'মোট অর্ডার', val: stats.total, color: 'from-blue-600 to-blue-800', icon: <Smartphone className="w-4 h-4" /> },
+                  { label: 'নতুন অর্ডার', val: stats.new, color: 'from-green-600 to-green-800', icon: <Plus className="w-4 h-4" /> },
+                  { label: 'মোট বিক্রয় (৳)', val: stats.sales, color: 'from-pink-600 to-pink-800', icon: <CreditCard className="w-4 h-4" /> }
                 ].map((s, i) => (
-                  <div key={i} className={cn("p-6 rounded-2xl bg-gradient-to-br shadow-xl", s.color)}>
-                    <div className="text-sm font-medium opacity-80 mb-1">{s.label}</div>
-                    <div className="text-3xl font-bold">{s.val}</div>
+                  <div key={i} className={cn("p-6 rounded-2xl bg-gradient-to-br shadow-xl border border-white/5", s.color)}>
+                    <div className="flex justify-between items-center opacity-80 mb-2">
+                       <span className="text-xs font-bold uppercase tracking-wider">{s.label}</span>
+                       {s.icon}
+                    </div>
+                    <div className="text-3xl font-black">{s.val.toLocaleString('bn-BD')}</div>
                   </div>
                 ))}
               </div>
@@ -666,6 +889,13 @@ export default function App() {
                             </td>
                             <td className="px-6 py-5" onClick={(e) => e.stopPropagation()}>
                               <div className="flex justify-center gap-2">
+                                <button 
+                                  onClick={() => setIsAdminInvoice(order)}
+                                  title="Generate Invoice"
+                                  className="w-9 h-9 bg-white/5 text-gray-300 border border-white/10 rounded-lg flex items-center justify-center hover:bg-white/10 transition-all"
+                                >
+                                  <CreditCard className="w-4 h-4" />
+                                </button>
                                 <button 
                                   onClick={() => {
                                     const text = `নাম: ${order.name}\nফোন: ${order.phone}\nঠিকানা: ${order.address}\nপরিমাণ: ${order.qty}\nমোট: ${order.total}`;
